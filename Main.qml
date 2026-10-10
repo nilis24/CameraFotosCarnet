@@ -72,16 +72,14 @@ ApplicationWindow {
 
         Rectangle {
             id: buttonArea
-            width: 320
-            height: 50
+            Layout.fillWidth: true
+            Layout.preferredHeight: 50
             Button {
                 id: photoButton
                 text: qsTr("Fer foto")
-                width: 320
-                height: 50
+                anchors.fill: parent
                 font.pointSize: 14
                 font.bold: true
-                anchors.centerIn: parent
                 onClicked: photoCapture.captureToFile()
                 background: Rectangle {
                     color: photoButton.down ? "#d0d0d0" : "lightgray"   // darker while pressed

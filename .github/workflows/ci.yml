@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  QT_VERSION: '6.12.0'
+  APP_TARGET: appCameraFotosCarnet
+  PACKAGE_NAME: CameraFotosCarnet-win64
+
+jobs:
+  # Qt 6 only ships 64-bit Windows binaries, so there is no 32-bit job:
+  # it would require building Qt itself from source for x86.
+  build:
+    name: Lint, build and installer (Windows x64)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: windows
+          target: desktop
+          arch: win64_mingw
+          modules: qtmultimedia
+          tools: tools_mingw1310 tools_ninja
+          cache: true
+
+      # Use the MinGW that matches the Qt binaries, not the runner's own one
+      - name: Add MinGW and Ninja to PATH
+        run: |
+          echo "$IQTA_TOOLS/mingw1310_64/bin" >> "$GITHUB_PATH"
+          echo "$IQTA_TOOLS/Ninja" >> "$GITHUB_PATH"
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$(cygpath -m "$QT_ROOT_DIR")" \
+            -DCMAKE_CXX_COMPILER=g++ \
+            "-DCMAKE_CXX_FLAGS=-Wall -Wextra -Werror"
+
+      - name: Build (warnings are errors)
+        run: cmake --build build
+
+      - name: Lint QML
+        run: |
+          cmake --build build --target all_qmllint 2>&1 | tee qmllint.log
+          if grep -q "^Warning:" qmllint.log; then
+            echo "::error::qmllint reported warnings"
+            exit 1
+          fi
+
+      - name: Package with windeployqt
+        run: |
+          mkdir dist
+          cp "build/$APP_TARGET.exe" dist/
+          windeployqt --release --no-translations --qmldir . "dist/$APP_TARGET.exe"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.PACKAGE_NAME }}
+          path: dist/
+          if-no-files-found: error
+
+      # Inno Setup comes preinstalled on the GitHub Windows runners
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME -replace '^v', '' } else { 'dev' }
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$version" installer\CameraFotosCarnet.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.PACKAGE_NAME }}-setup
+          path: installer/Output/*.exe
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.PACKAGE_NAME }}
+          path: CameraFotosCarnet
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.PACKAGE_NAME }}-setup
+          path: setup
+
+      - name: Create portable zip
+        run: zip -r "CameraFotosCarnet-${GITHUB_REF_NAME}-win64.zip" CameraFotosCarnet
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            setup/*.exe \
+            "CameraFotosCarnet-${GITHUB_REF_NAME}-win64.zip" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes
