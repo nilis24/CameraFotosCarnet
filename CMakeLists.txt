@@ -8,11 +8,6 @@ find_package(Qt6 REQUIRED COMPONENTS Quick)
 
 qt_standard_project_setup(REQUIRES 6.10)
 
-# Content of downloaded design from Figma to Qt or similar
-if (EXISTS "${CMAKE_CURRENT_LIST_DIR}/importedcontent/CMakeLists.txt")
-    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/importedcontent)
-endif()
-
 qt_add_executable(appCameraFotosCarnet
     main.cpp
     assets/app.rc

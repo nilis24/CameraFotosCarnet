@@ -14,7 +14,10 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  QT_VERSION: '6.12.0'
+  # Qt 6.11+ moved to a new online repository layout that aqtinstall 3.3.0
+  # (used by install-qt-action) cannot download yet. 6.10.3 is the newest
+  # version it can install and satisfies the project's minimum (6.10).
+  QT_VERSION: '6.10.3'
   APP_TARGET: appCameraFotosCarnet
   PACKAGE_NAME: CameraFotosCarnet-win64
 
