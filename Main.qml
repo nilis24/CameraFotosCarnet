@@ -33,7 +33,7 @@ ApplicationWindow {
         currentFolder: StandardPaths.writableLocation(StandardPaths.PicturesLocation)
 
         onAccepted: photoManager.processPhoto(window.tempPhotoPath, selectedFile,
-                                              viewfinder.width, viewfinder.height)
+                                              viewfinder.width*3, viewfinder.height*3)
         onRejected: photoManager.discardPhoto(window.tempPhotoPath)   // cancelled
     }
 
